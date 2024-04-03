@@ -8,4 +8,3 @@ edition = "2021"
 
 [dependencies]
 configurations = { version = "0.1.0", path = "configurations" }
-serde = "1.0.197"

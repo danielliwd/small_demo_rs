@@ -4,6 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::error::Error;
 use std::fmt;
+use merge::Merge;
+
+pub fn overwrite_x<T>(left: &mut T, right: T){
+    *left=right;
+}
 
 pub fn parse()-> (Config, Opt){
     let opt = Opt::from_args();
@@ -28,14 +33,31 @@ impl fmt::Display for ConfigErr{
 impl Error for ConfigErr{}
 
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Merge)]
 #[serde(default)]
 pub struct Config{
+    #[merge(skip)]
     version: usize,
 
     /// Whether to run this process in the background.
+    #[merge(strategy = overwrite_x)]
     pub daemon: bool,
+
+    // override is a reserved keyword in Rust, so add a prefix
+    #[merge(strategy = overwrite_x)]
+    pub r#override: i8,
 }
+
+impl Default for Config{
+    fn default() -> Self {
+        Config{
+            version: 0,
+            daemon: false,
+            r#override: 0,
+        }
+    }
+}
+
 
 /// Call `Opt::from_args()` to build this object from the process's command line arguments.
 #[derive(StructOpt, Debug)]
@@ -52,16 +74,8 @@ pub struct Opt{
 
     /// `-c` or `--conf` can be used
     #[structopt(short, long)]
-    pub conf: Option<String>,
-}
+    pub conf: Vec<String>,
 
-impl Default for Config{
-    fn default() -> Self {
-        Config{
-            version: 0,
-            daemon: false,
-        }
-    }
 }
 
 impl Default for Opt {
@@ -83,15 +97,19 @@ impl Config{
     }
 
     pub fn load_yaml_with_opt_override(opt: &Opt) -> Result<Self, Box<dyn Error>> {
-        if let Some(path) = &opt.conf {
-            let mut conf = Self::load_from_yaml(path)?;
-            if opt.daemon {
-                conf.daemon = true;
-            }
-            return Ok(conf);
-        } else {
+        if opt.conf.len() == 0 {
             return Err(ConfigErr::new("No path specified"));
         }
+
+        let mut conf = Self::default();
+        for ymlpath in &opt.conf {
+            let cur_conf = Self::load_from_yaml(ymlpath)?;
+            conf.merge(cur_conf);
+        }
+        if opt.daemon {
+            conf.daemon = true;
+        }
+        Ok(conf)
     }
 
     pub fn new() -> Option<Self> {
