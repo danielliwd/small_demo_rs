@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::error::Error;
 use std::fmt;
-use merge::Merge;
 
 pub fn overwrite_x<T>(left: &mut T, right: T){
     *left=right;
@@ -33,18 +32,16 @@ impl fmt::Display for ConfigErr{
 impl Error for ConfigErr{}
 
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Merge)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config{
-    #[merge(skip)]
     version: usize,
 
     /// Whether to run this process in the background.
-    #[merge(strategy = overwrite_x)]
     pub daemon: bool,
 
+    pub nonoverride: i8,
     // override is a reserved keyword in Rust, so add a prefix
-    #[merge(strategy = overwrite_x)]
     pub r#override: i8,
 }
 
@@ -53,6 +50,7 @@ impl Default for Config{
         Config{
             version: 0,
             daemon: false,
+            nonoverride: 0,
             r#override: 0,
         }
     }
@@ -84,6 +82,27 @@ impl Default for Opt {
     }
 }
 
+fn merge_yaml(a: &mut serde_yaml::Value, b: serde_yaml::Value) {
+    match (a, b) {
+        (a @ &mut serde_yaml::Value::Mapping(_), serde_yaml::Value::Mapping(b)) => {
+            let a = a.as_mapping_mut().unwrap();
+            for (k, v) in b {
+                if v.is_sequence() && a.contains_key(&k) && a[&k].is_sequence() { 
+                    let mut _b = a.get(&k).unwrap().as_sequence().unwrap().to_owned();
+                    _b.append(&mut v.as_sequence().unwrap().to_owned());
+                    a[&k] = serde_yaml::Value::from(_b);
+                    continue;
+                }
+                if !a.contains_key(&k) {a.insert(k.to_owned(), v.to_owned());}
+                else { merge_yaml(&mut a[&k], v); }
+
+            }
+            
+        }
+        (a, b) => *a = b,
+    }
+}
+
 
 impl Config{
     // Does not has to be async until we want runtime reload
@@ -100,12 +119,14 @@ impl Config{
         if opt.conf.len() == 0 {
             return Err(ConfigErr::new("No path specified"));
         }
-
-        let mut conf = Self::default();
+        let mut target_yml: serde_yaml::Value = serde_yaml::from_str("---\nversion: 1")?;
         for ymlpath in &opt.conf {
-            let cur_conf = Self::load_from_yaml(ymlpath)?;
-            conf.merge(cur_conf);
+            let conf_str = fs::read_to_string(&ymlpath)?;
+            let val : serde_yaml::Value = serde_yaml::from_str(&conf_str)?;
+            merge_yaml(&mut target_yml, val);
         }
+        let mut conf: Self = serde_yaml::from_value(target_yml)?;
+
         if opt.daemon {
             conf.daemon = true;
         }
