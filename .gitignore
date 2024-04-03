@@ -1,0 +1,8 @@
+
+## for rust
+target
+*.lock
+
+## others
+.local
+.env
