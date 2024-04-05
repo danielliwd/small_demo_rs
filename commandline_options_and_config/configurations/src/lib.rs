@@ -1,15 +1,23 @@
+#[allow(unused_imports)]
 use log::{info, error, debug, warn, trace};
+
 use structopt::StructOpt;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::PathBuf;
 use std::error::Error;
 use std::fmt;
-
-pub fn overwrite_x<T>(left: &mut T, right: T){
-    *left=right;
-}
+use dotenv::{dotenv, from_filename};
 
 pub fn parse()-> (Config, Opt){
+    dotenv().ok();
+    let opt = Opt::from_args();
+    let conf = Config::load_yaml_with_opt_override(&opt).unwrap();
+    (conf, opt)
+}
+
+pub fn parse_with_env(env_file_name: &str)-> (Config, Opt){
+    from_filename(env_file_name).ok();
     let opt = Opt::from_args();
     let conf = Config::load_yaml_with_opt_override(&opt).unwrap();
     (conf, opt)
@@ -59,20 +67,46 @@ impl Default for Config{
 
 /// Call `Opt::from_args()` to build this object from the process's command line arguments.
 #[derive(StructOpt, Debug)]
-#[structopt(name = "basic")]
+#[structopt(
+    name = "my-program-name",
+    version = "0.1.4",
+    about = "description for your command"
+)]
 pub struct Opt{
     
     /// `-d` or `--daemon` can be used
     #[structopt(short, long)]
     pub daemon: bool,
 
+    #[structopt(short, long, env="LOG_LEVEL", default_value="1")]
+    pub log_level: i8,
+
     /// `-t` or `--test` can be used
-    #[structopt(short, long)]
+    #[structopt(
+        short = "t",
+        long = "test",
+        env = "TESTMODE",
+        takes_value=false,
+        help = "toggle test mode",
+    )]
     pub test: bool,
 
-    /// `-c` or `--conf` can be used
-    #[structopt(short, long)]
-    pub conf: Vec<String>,
+    #[structopt(
+        short = "T",
+        long = "no-test",
+        conflicts_with="test",
+        name="notest",
+    )]
+    pub notest: bool,
+
+    /// `-c` or `--conf` can be used multiple times
+    #[structopt(
+        short, 
+        long,
+        value_name = "YMLFILE", // https://docs.rs/clap/2.34.0/clap/struct.Arg.html#method.value_name
+        parse(from_os_str),
+    )]
+    pub conf: Vec<PathBuf>,
 
 }
 

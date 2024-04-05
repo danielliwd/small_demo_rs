@@ -25,3 +25,7 @@ multiple configs will override by key. This feature is useful for `.env.yml`.
    ```
 
 3. modify configurations for your project
+
+## 参考
+
+https://colobu.com/2023/10/09/mping-write-by-rust/#more
