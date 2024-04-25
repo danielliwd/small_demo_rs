@@ -8,7 +8,8 @@ RUN apk add --no-cache build-base musl-dev openssl-dev openssl
 WORKDIR /app
 
 # Copy over the Cargo.toml files to the shell project
-COPY Cargo.toml Cargo.lock ./
+COPY  docker_rust_scripts.sh  Cargo.toml Cargo.lock ./
+
 COPY docker_rust_precompile.rs src/main.rs
 
 # Build and cache the dependencies
@@ -16,13 +17,13 @@ ARG APPNAME=app
 RUN cargo fetch \
     && cargo build --release \
     && rm -rf ./src \
-    && find target -name `awk -F' = ' '$1 ~ /^name/ { gsub(/"/, "", $2); printf("%s",$2) }' Cargo.toml`*|xargs rm -rf
+    && ./docker_rust_scripts.sh remove_local_deps_after_build
 
 
 # Copy the actual code files and build the application
 COPY src ./src/
 RUN cargo build --release \
-    && mv ./target/release/`awk -F' = ' '$1 ~ /^name/ { gsub(/"/, "", $2); printf("%s",$2) }' Cargo.toml` ./target/release/app
+    && ./docker_rust_scripts.sh rename_artifact_to_app
 
 
 # STAGE2: create a slim image with the compiled binary
