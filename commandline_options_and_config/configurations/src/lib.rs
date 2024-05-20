@@ -154,6 +154,7 @@ impl Config{
             return Err(ConfigErr::new("No path specified"));
         }
         let mut target_yml: serde_yaml::Value = serde_yaml::from_str("---\nversion: 1")?;
+        // 实现多个 yaml 文件合并的效果
         for ymlpath in &opt.conf {
             let conf_str = fs::read_to_string(&ymlpath)?;
             let val : serde_yaml::Value = serde_yaml::from_str(&conf_str)?;
